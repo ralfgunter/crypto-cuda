@@ -774,7 +774,7 @@ int main( int argc, char *argv[] ) {
 	uchar4 *dev_cipher_key, *dev_round_keys;
 	char *dev_file;
 	char *host_file;
-	uint8_t *dev_sbox;//, *dev_inv_sbox;
+	uint8_t *dev_sbox, *dev_inv_sbox;
 	size_t file_size;
 	
 	// Generates 128-bit cipher-key from two uint64_t
@@ -823,7 +823,7 @@ int main( int argc, char *argv[] ) {
 	
 	
 	
-	/*
+	
 	// Decrypts the file
 	decrypt128 <<< ((file_size/16 + NUM_THREADS - 1)/ NUM_THREADS), NUM_THREADS >>>
 		(
@@ -836,7 +836,7 @@ int main( int argc, char *argv[] ) {
 	
 	// Writes the encrypted file to disk
 	writeToFile(host_file, argv[3], file_size);
-	*/
+	
 	
 	
 	
