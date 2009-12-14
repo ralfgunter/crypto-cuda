@@ -3,9 +3,6 @@
 
 #define NUM_THREADS 256
 
-enum ciphers { aes128, aes192, aes256 };
-typedef enum ciphers ciphertype;
-
 uint8_t s_box[] = {
 	0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
 	0x30, 0x01, 0x67, 0x2b,	0xfe, 0xd7, 0xab, 0x76,
@@ -95,6 +92,18 @@ __device__ uint8_t gmul( uint8_t a, uint8_t b )
 	return p;
 }
 
+
+
+/**
+  *
+  *
+  *
+  * 128 bits
+  *
+  *
+  *
+**/
+
 // Key scheduling kernels
 __device__ uchar4 rotWord128( uchar4 *state, uint8_t round_number )
 {
@@ -131,7 +140,7 @@ __device__ uchar4 xorTransformation( uchar4 word1, uchar4 word2, uint8_t rcon )
 	
 	return result;
 }
-
+/*
 __device__ void roundKeyGeneration128( uchar4 *keys, uint8_t *sbox )
 {
 	uchar4 temp;
@@ -178,8 +187,7 @@ __global__ void generateRoundKeys128( uchar4 *cipher_key, uchar4 *round_keys, ui
 }
 
 
-
-
+*/
 // Encryption process kernels
 __device__ void addRoundKey128( uchar4 *state, uchar4 *keys, uint8_t round_number )
 {
@@ -207,7 +215,7 @@ __device__ void addRoundKey128( uchar4 *state, uchar4 *keys, uint8_t round_numbe
 	state[3].z ^= keys[4*round_number + 3].z;
 	state[3].w ^= keys[4*round_number + 3].w;
 }
-
+/*
 __device__ void subBytes128( uchar4 *state, uint8_t *sbox )
 {
 	// First column
@@ -441,7 +449,7 @@ __global__ void encrypt128( char *file, int file_size, uchar4 *round_keys, uint8
 		file[16 * id + 15] = state[3].w;
 	}
 }
-
+*/
 
 // Decryption process kernels
 __device__ void invShiftRows128( uchar4 *state )
@@ -553,7 +561,7 @@ __device__ void invMixColumns128( uchar4 *state )
 	state[3].z = temp.z;
 	state[3].w = temp.w;
 }
-
+/*
 __device__ void decryptBlock128( uchar4 *state, uchar4 *keys, uint8_t *inv_sbox )
 {
 	// First round
@@ -677,11 +685,358 @@ __global__ void decrypt128( char *file, int file_size, uchar4 *round_keys, uint8
 		file[16 * id + 15] = state[3].w;
 	}
 }
+*/
+
+
+/**
+  *
+  *
+  *
+  * 192 bits
+  *
+  *
+  *
+**/
+
+// Key scheduling kernels
+__device__ uchar4 rotWord192( uchar4 *state, uint8_t round_number )
+{
+	uchar4 result;
+	
+	result.x = state[6*round_number - 1].y;
+	result.y = state[6*round_number - 1].z;
+	result.z = state[6*round_number - 1].w;
+	result.w = state[6*round_number - 1].x;
+	
+	return result;
+}
+
+__device__ void roundKeyGeneration192( uchar4 *keys, uint8_t *sbox )
+{
+	uchar4 temp;
+	uint8_t rcon[] = {
+		0x01, 0x02, 0x04,
+		0x08, 0x10,	0x20,
+		0x40, 0x80, 0x1b,
+		0x36, 0x6c, 0xd8
+	};
+	
+#pragma unroll
+	for (int n = 1; n <= 12; ++n) {
+		temp = subBytes(rotWord192(keys, n), sbox);
+		keys[6*n + 0] = xorTransformation(temp, keys[6*(n-1)], rcon[n-1]);
+		
+		keys[6*n + 1] = xorTransformation(keys[6*n + 0], keys[6*(n-1) + 1], 0);
+		keys[6*n + 2] = xorTransformation(keys[6*n + 1], keys[6*(n-1) + 2], 0);
+		keys[6*n + 3] = xorTransformation(keys[6*n + 2], keys[6*(n-1) + 3], 0);
+		keys[6*n + 4] = xorTransformation(keys[6*n + 3], keys[6*(n-1) + 4], 0);
+		keys[6*n + 5] = xorTransformation(keys[6*n + 4], keys[6*(n-1) + 5], 0);
+	}
+}
+
+__global__ void generateRoundKeys192( uchar4 *cipher_key, uchar4 *round_keys, uint8_t *sbox )
+{
+	__shared__ uchar4 shmem[6 * 13 * sizeof(uchar4)];
+	
+#pragma unroll
+	for (int i = 0; i < 6; ++i) {
+		shmem[i].x = cipher_key[i].x;
+		shmem[i].y = cipher_key[i].y;
+		shmem[i].z = cipher_key[i].z;
+		shmem[i].w = cipher_key[i].w;
+	}
+	
+	roundKeyGeneration192(shmem, sbox);
+	
+#pragma unroll
+	for (int i = 0; i < 13; ++i) {
+#pragma unroll
+		for (int p = 0; p < 6; ++p) {
+			round_keys[6*i + p].x = shmem[6*i + p].x;
+			round_keys[6*i + p].y = shmem[6*i + p].y;
+			round_keys[6*i + p].z = shmem[6*i + p].z;
+			round_keys[6*i + p].w = shmem[6*i + p].w;
+		}
+	}
+}
+
+/*
+__device__ void encryptBlock192( uchar4 *state, uchar4 *keys, uint8_t *sbox )
+{
+	// First round
+	addRoundKey128(state, keys,  0);
+	
+	// Rounds 1 to 11
+	// 1
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  1);
+	// 2
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  2);
+	// 3
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  3);
+	// 4
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  4);
+	// 5
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  5);
+	// 6
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  6);
+	// 7
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  7);
+	// 8
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  8);
+	// 9
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys,  9);
+	// 10
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys, 10);
+	// 11
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	mixColumns128(state);
+	addRoundKey128(state, keys, 11);
+	
+	// Last round
+	subBytes128(state, sbox);
+	shiftRows128(state);
+	addRoundKey128(state, keys, 12);
+}
+
+__global__ void encrypt192( char *file, int file_size, uchar4 *round_keys, uint8_t *sbox )
+{
+	__shared__ uchar4  sh_round_keys[13 * 4 * sizeof(uchar4)];
+	__shared__ uint8_t         sh_sbox[256 * sizeof(uint8_t)];
+	
+	int id = NUM_THREADS * blockIdx.x + threadIdx.x;
+	
+	for (int i = 0; i < 52; ++i) {
+		sh_round_keys[i].x = round_keys[i].x;
+		sh_round_keys[i].y = round_keys[i].y;
+		sh_round_keys[i].z = round_keys[i].z;
+		sh_round_keys[i].w = round_keys[i].w;
+	}
+
+	// This forces the number of threads per block to be 256
+	sh_sbox[threadIdx.x] = sbox[threadIdx.x];
+	
+	__syncthreads();
+	
+	if (id < file_size / 16) {
+		uchar4 state[4];
+		
+		state[0].x = file[16 * id +  0];
+		state[0].y = file[16 * id +  1];
+		state[0].z = file[16 * id +  2];
+		state[0].w = file[16 * id +  3];
+		
+		state[1].x = file[16 * id +  4];
+		state[1].y = file[16 * id +  5];
+		state[1].z = file[16 * id +  6];
+		state[1].w = file[16 * id +  7];
+		
+		state[2].x = file[16 * id +  8];
+		state[2].y = file[16 * id +  9];
+		state[2].z = file[16 * id + 10];
+		state[2].w = file[16 * id + 11];
+		
+		state[3].x = file[16 * id + 12];
+		state[3].y = file[16 * id + 13];
+		state[3].z = file[16 * id + 14];
+		state[3].w = file[16 * id + 15];
+		
+		encryptBlock192(state, sh_round_keys, sh_sbox);
+		
+		file[16 * id +  0] = state[0].x;
+		file[16 * id +  1] = state[0].y;
+		file[16 * id +  2] = state[0].z;
+		file[16 * id +  3] = state[0].w;
+		
+		file[16 * id +  4] = state[1].x;
+		file[16 * id +  5] = state[1].y;
+		file[16 * id +  6] = state[1].z;
+		file[16 * id +  7] = state[1].w;
+		
+		file[16 * id +  8] = state[2].x;
+		file[16 * id +  9] = state[2].y;
+		file[16 * id + 10] = state[2].z;
+		file[16 * id + 11] = state[2].w;
+		
+		file[16 * id + 12] = state[3].x;
+		file[16 * id + 13] = state[3].y;
+		file[16 * id + 14] = state[3].z;
+		file[16 * id + 15] = state[3].w;
+	}
+}
+*/
+
+
+// Decryption process kernels
+__device__ void decryptBlock192( uchar4 *state, uchar4 *keys, uint8_t *inv_sbox )
+{
+	// First round
+	addRoundKey128(state, keys, 12);
+	
+	// Last round?
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys, 11);
+	
+	// Rounds 1 to 9
+	// 1
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys, 10);
+	// 2
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  9);
+	// 3
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  8);
+	// 4
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  7);
+	// 5
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  6);
+	// 6
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  5);
+	// 7
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  4);
+	// 8
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  3);
+	// 9
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  2);
+	// 10
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  1);
+	// 11
+	invMixColumns128(state);
+	invShiftRows128(state);
+	invSubBytes128(state, inv_sbox);
+	addRoundKey128(state, keys,  0);
+}
+
+__global__ void decrypt192( char *file, int file_size, uchar4 *round_keys, uint8_t *inv_sbox )
+{
+	__shared__ uchar4  sh_round_keys[13 * 4 * sizeof(uchar4)];
+	__shared__ uint8_t         sh_sbox[256 * sizeof(uint8_t)];
+	
+	int id = NUM_THREADS * blockIdx.x + threadIdx.x;
+	
+	for (int i = 0; i < 52; ++i) {
+		sh_round_keys[i].x = round_keys[i].x;
+		sh_round_keys[i].y = round_keys[i].y;
+		sh_round_keys[i].z = round_keys[i].z;
+		sh_round_keys[i].w = round_keys[i].w;
+	}
+	
+	// This forces the number of threads per block to be 256
+	sh_sbox[threadIdx.x] = inv_sbox[threadIdx.x];
+	
+	__syncthreads();
+	
+	if (id < file_size / 16) {
+		uchar4 state[4];
+		
+		state[0].x = file[16 * id +  0];
+		state[0].y = file[16 * id +  1];
+		state[0].z = file[16 * id +  2];
+		state[0].w = file[16 * id +  3];
+		
+		state[1].x = file[16 * id +  4];
+		state[1].y = file[16 * id +  5];
+		state[1].z = file[16 * id +  6];
+		state[1].w = file[16 * id +  7];
+		
+		state[2].x = file[16 * id +  8];
+		state[2].y = file[16 * id +  9];
+		state[2].z = file[16 * id + 10];
+		state[2].w = file[16 * id + 11];
+		
+		state[3].x = file[16 * id + 12];
+		state[3].y = file[16 * id + 13];
+		state[3].z = file[16 * id + 14];
+		state[3].w = file[16 * id + 15];
+		
+		decryptBlock192(state, sh_round_keys, sh_sbox);
+		
+		file[16 * id +  0] = state[0].x;
+		file[16 * id +  1] = state[0].y;
+		file[16 * id +  2] = state[0].z;
+		file[16 * id +  3] = state[0].w;
+		
+		file[16 * id +  4] = state[1].x;
+		file[16 * id +  5] = state[1].y;
+		file[16 * id +  6] = state[1].z;
+		file[16 * id +  7] = state[1].w;
+		
+		file[16 * id +  8] = state[2].x;
+		file[16 * id +  9] = state[2].y;
+		file[16 * id + 10] = state[2].z;
+		file[16 * id + 11] = state[2].w;
+		
+		file[16 * id + 12] = state[3].x;
+		file[16 * id + 13] = state[3].y;
+		file[16 * id + 14] = state[3].z;
+		file[16 * id + 15] = state[3].w;
+	}
+}
 
 
 
 // Host code
-void generateCipherKey128( uchar4 *result, uint64_t block1, uint64_t block2 ) {
+void generateCipherKey128( uchar4 *result, uint64_t block1, uint64_t block2 )
+{
 	for (int i = 0; i < 2; ++i) {
 		result[i + 0].x = (block1 >> (56 - 32*i)) & 0xFF;
 		result[i + 0].y = (block1 >> (48 - 32*i)) & 0xFF;
@@ -695,7 +1050,27 @@ void generateCipherKey128( uchar4 *result, uint64_t block1, uint64_t block2 ) {
 	}
 }
 
-int loadFileIntoMemory( char **memory, const char *filename, ciphertype type ) {
+void generateCipherKey192( uchar4 *result, uint64_t block1, uint64_t block2, uint64_t block3 )
+{
+	for (int i = 0; i < 2; ++i) {
+		result[i + 0].x = (block1 >> (56 - 32*i)) & 0xFF;
+		result[i + 0].y = (block1 >> (48 - 32*i)) & 0xFF;
+		result[i + 0].z = (block1 >> (40 - 32*i)) & 0xFF;
+		result[i + 0].w = (block1 >> (32 - 32*i)) & 0xFF;
+		
+		result[i + 2].x = (block2 >> (56 - 32*i)) & 0xFF;
+		result[i + 2].y = (block2 >> (48 - 32*i)) & 0xFF;
+		result[i + 2].z = (block2 >> (40 - 32*i)) & 0xFF;
+		result[i + 2].w = (block2 >> (32 - 32*i)) & 0xFF;
+		
+		result[i + 4].x = (block3 >> (56 - 32*i)) & 0xFF;
+		result[i + 4].y = (block3 >> (48 - 32*i)) & 0xFF;
+		result[i + 4].z = (block3 >> (40 - 32*i)) & 0xFF;
+		result[i + 4].w = (block3 >> (32 - 32*i)) & 0xFF;
+	}
+}
+
+int loadFileIntoMemory( char **memory, const char *filename ) {
 	size_t file_size;
 	char pad;
 	
@@ -716,17 +1091,7 @@ int loadFileIntoMemory( char **memory, const char *filename, ciphertype type ) {
 	fseek(fp, 0, SEEK_SET);
 	
 	// Calculates padding
-	switch (type) {
-		case aes128:
-			pad = (-file_size) % 16;
-			break;
-		case aes192:
-			pad = (-file_size) % 24;
-			break;
-		case aes256:
-			pad = (-file_size) % 32;
-			break;
-	}
+	pad = (-file_size) % 16;
 	file_size += pad;
 	
 	// Allocates memory
@@ -768,7 +1133,9 @@ int writeToFile( char *memory, const char *filename, size_t file_size ) {
 	return 0;
 }
 
-int main( int argc, char *argv[] ) {
+
+/*
+int main128( int argc, char *argv[] ) {
 	uchar4 cipher_key[4];
 	uchar4 *host_round_keys;
 	uchar4 *dev_cipher_key, *dev_round_keys;
@@ -781,7 +1148,7 @@ int main( int argc, char *argv[] ) {
 	generateCipherKey128(cipher_key, 0x2b7e151628aed2a6, 0xabf7158809cf4f3c);
 	
 	// Loads file from disk
-	file_size = loadFileIntoMemory(&host_file, argv[1], aes128);
+	file_size = loadFileIntoMemory(&host_file, argv[1]);
 	
 	// Allocates memory for various resources
 	host_round_keys =   (uchar4 *) malloc(11 * 4 * sizeof(uchar4));
@@ -809,7 +1176,7 @@ int main( int argc, char *argv[] ) {
 	
 	
 	// Encrypts the file on the device
-	encrypt128 <<< ((file_size/16 + NUM_THREADS - 1)/ NUM_THREADS), 256 >>>
+	encrypt128 <<< ((file_size/16 + 255)/ 256), 256 >>>
 		(
 			dev_file, file_size, dev_round_keys, dev_sbox
 		);
@@ -840,14 +1207,14 @@ int main( int argc, char *argv[] ) {
 	
 	
 	
-/*
+	
 	cudaMemcpy(host_round_keys, dev_round_keys, 11 * 4 * sizeof(uchar4), cudaMemcpyDeviceToHost);
 	
 	printf("%02x %02x %02x %02x\n", host_round_keys[4].x, host_round_keys[5].x, host_round_keys[6].x, host_round_keys[7].x);
 	printf("%02x %02x %02x %02x\n", host_round_keys[4].y, host_round_keys[5].y, host_round_keys[6].y, host_round_keys[7].y);
 	printf("%02x %02x %02x %02x\n", host_round_keys[4].z, host_round_keys[5].z, host_round_keys[6].z, host_round_keys[7].z);
 	printf("%02x %02x %02x %02x\n", host_round_keys[4].w, host_round_keys[5].w, host_round_keys[6].w, host_round_keys[7].w);
-*/	
+	
 	
 	// Frees up memory that is not used anymore
 	free(host_round_keys);
@@ -857,6 +1224,112 @@ int main( int argc, char *argv[] ) {
 	cudaFree(dev_sbox);
 	cudaFree(dev_inv_sbox);
 	cudaFree(dev_file);
+	
+	return 0;
+}
+*/
+
+
+int main192( int argc, char *argv[] ) {
+	uchar4 cipher_key[6];
+	uchar4 *host_round_keys;
+	uchar4 *dev_cipher_key, *dev_round_keys;
+	char *dev_file;
+	char *host_file;
+	uint8_t *dev_sbox, *dev_inv_sbox;
+	size_t file_size;
+	
+	
+	
+	// Generates a 192-bit cipher-key from three uint64_t
+	generateCipherKey192(cipher_key, 0x95A8EE8E89979B9E,
+									 0xFDCBC6EB9797528D,
+									 0x432DC26061553818 );
+	
+	// Loads file from disk
+	file_size = loadFileIntoMemory(&host_file, argv[1]);
+	
+	// Allocates memory for various resources
+	host_round_keys =   (uchar4 *) malloc(13 * 6 * sizeof(uchar4));
+	cudaMalloc((void **) &dev_round_keys, 13 * 6 * sizeof(uchar4));
+	cudaMalloc((void **) &dev_cipher_key,      6 * sizeof(uchar4));
+	cudaMalloc((void **) &dev_sbox,          256 * sizeof(uint8_t));
+	cudaMalloc((void **) &dev_inv_sbox,      256 * sizeof(uint8_t));
+	cudaMalloc((void **) &dev_file,    file_size * sizeof(char));
+	
+	// Copies memory to the device
+	cudaMemcpy(dev_cipher_key, cipher_key,       6 * sizeof(uchar4), cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_sbox,       s_box,         256 * sizeof(uint8_t), cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_inv_sbox,   inv_s_box,    256 * sizeof(uint8_t), cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_file,       host_file,  file_size * sizeof(char), cudaMemcpyHostToDevice);
+	
+	
+	
+	// Generates the round keys, storing them on the global memory
+	generateRoundKeys192 <<< 1, 1 >>>
+		(
+			dev_cipher_key, dev_round_keys, dev_sbox
+		);
+	cudaThreadSynchronize();
+	
+	
+	/*
+	// Encrypts the file on the device
+	encrypt192 <<< ((file_size/16 + 255)/ 256), 256 >>>
+		(
+			dev_file, file_size, dev_round_keys, dev_sbox
+		);
+	cudaThreadSynchronize();
+	
+	// Copies back the result from the device
+	cudaMemcpy(host_file, dev_file, file_size, cudaMemcpyDeviceToHost);
+	
+	// Writes the encrypted file to disk
+	writeToFile(host_file, argv[2], file_size);
+	*/
+	
+	
+	
+	// Decrypts the file
+	decrypt192 <<< ((file_size/16 + NUM_THREADS - 1)/ NUM_THREADS), NUM_THREADS >>>
+		(
+			dev_file, file_size, dev_round_keys, dev_inv_sbox
+		);
+	cudaThreadSynchronize();
+	
+	// Copies back the result from the device
+	cudaMemcpy(host_file, dev_file, file_size, cudaMemcpyDeviceToHost);
+	
+	// Writes the encrypted file to disk
+	writeToFile(host_file, argv[3], file_size);
+	
+	
+	
+	/*
+	// Copies back the round keys and prints one of them
+	cudaMemcpy(host_round_keys, dev_round_keys, 11 * 4 * sizeof(uchar4), cudaMemcpyDeviceToHost);
+	
+	printf("%02x %02x %02x %02x %02x %02x\n", host_round_keys[6].x, host_round_keys[7].x, host_round_keys[8].x, host_round_keys[9].x, host_round_keys[10].x, host_round_keys[11].x);
+	printf("%02x %02x %02x %02x %02x %02x\n", host_round_keys[6].y, host_round_keys[7].y, host_round_keys[8].y, host_round_keys[9].y, host_round_keys[10].y, host_round_keys[11].y);
+	printf("%02x %02x %02x %02x %02x %02x\n", host_round_keys[6].z, host_round_keys[7].z, host_round_keys[8].z, host_round_keys[9].z, host_round_keys[10].z, host_round_keys[11].z);
+	printf("%02x %02x %02x %02x %02x %02x\n", host_round_keys[6].w, host_round_keys[7].w, host_round_keys[8].w, host_round_keys[9].w, host_round_keys[10].w, host_round_keys[11].w);
+	*/
+	
+	// Frees up memory that is not used anymore
+	free(host_round_keys);
+	free(host_file);
+	cudaFree(dev_cipher_key);
+	cudaFree(dev_round_keys);
+	cudaFree(dev_sbox);
+	cudaFree(dev_inv_sbox);
+	cudaFree(dev_file);
+	
+	return 0;
+}
+
+int main( int argc, char *argv[] ) {
+	//main128(argc, argv);
+	main192(argc, argv);
 	
 	return 0;
 }
