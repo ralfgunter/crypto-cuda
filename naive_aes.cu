@@ -1,5 +1,14 @@
+/*
+ * AES 128, 192, 256 bits implementation on CUDA.
+ * Part of the crypto-cuda project.
+ *
+ * This file is in the public domain.
+ *
+*/
+
 #include <stdio.h>
 #include <stdint.h>
+#include <time.h>
 
 #define NUM_THREADS 256
 
@@ -140,7 +149,7 @@ __device__ uchar4 xorTransformation( uchar4 word1, uchar4 word2, uint8_t rcon )
 	
 	return result;
 }
-/*
+
 __device__ void roundKeyGeneration128( uchar4 *keys, uint8_t *sbox )
 {
 	uchar4 temp;
@@ -162,7 +171,7 @@ __device__ void roundKeyGeneration128( uchar4 *keys, uint8_t *sbox )
 
 __global__ void generateRoundKeys128( uchar4 *cipher_key, uchar4 *round_keys, uint8_t *sbox )
 {
-	extern __shared__ uchar4 shmem[];
+	__shared__ uchar4 shmem[4 * 11 * sizeof(uchar4)];
 	
 #pragma unroll
 	for (int i = 0; i < 4; ++i) {
@@ -187,7 +196,7 @@ __global__ void generateRoundKeys128( uchar4 *cipher_key, uchar4 *round_keys, ui
 }
 
 
-*/
+
 // Encryption process kernels
 __device__ void addRoundKey128( uchar4 *state, uchar4 *keys, uint8_t round_number )
 {
@@ -203,7 +212,7 @@ __device__ void addRoundKey128( uchar4 *state, uchar4 *keys, uint8_t round_numbe
 	state[1].z ^= keys[4*round_number + 1].z;
 	state[1].w ^= keys[4*round_number + 1].w;
 	
-	// Third columna
+	// Third column
 	state[2].x ^= keys[4*round_number + 2].x;
 	state[2].y ^= keys[4*round_number + 2].y;
 	state[2].z ^= keys[4*round_number + 2].z;
@@ -215,7 +224,7 @@ __device__ void addRoundKey128( uchar4 *state, uchar4 *keys, uint8_t round_numbe
 	state[3].z ^= keys[4*round_number + 3].z;
 	state[3].w ^= keys[4*round_number + 3].w;
 }
-/*
+
 __device__ void subBytes128( uchar4 *state, uint8_t *sbox )
 {
 	// First column
@@ -449,8 +458,8 @@ __global__ void encrypt128( char *file, int file_size, uchar4 *round_keys, uint8
 		file[16 * id + 15] = state[3].w;
 	}
 }
-*/
 
+/*
 // Decryption process kernels
 __device__ void invShiftRows128( uchar4 *state )
 {
@@ -561,7 +570,8 @@ __device__ void invMixColumns128( uchar4 *state )
 	state[3].z = temp.z;
 	state[3].w = temp.w;
 }
-/*
+
+
 __device__ void decryptBlock128( uchar4 *state, uchar4 *keys, uint8_t *inv_sbox )
 {
 	// First round
@@ -1042,7 +1052,7 @@ __global__ void decrypt192( char *file, int file_size, uchar4 *round_keys, uint8
   *
   *
 **/
-
+/*
 // Key scheduling kernels
 __device__ uchar4 rotWord256( uchar4 *state, uint8_t round_number )
 {
@@ -1111,7 +1121,7 @@ __global__ void generateRoundKeys256( uchar4 *cipher_key, uchar4 *round_keys, ui
 	}
 }
 
-/*
+
 // Encryption process kernels
 __device__ void encryptBlock256( uchar4 *state, uchar4 *keys, uint8_t *sbox )
 {
@@ -1256,7 +1266,7 @@ __global__ void encrypt256( char *file, int file_size, uchar4 *round_keys, uint8
 		file[16 * id + 15] = state[3].w;
 	}
 }
-*/
+
 
 // Decryption process kernels
 __device__ void decryptBlock256( uchar4 *state, uchar4 *keys, uint8_t *inv_sbox )
@@ -1407,9 +1417,13 @@ __global__ void decrypt256( char *file, int file_size, uchar4 *round_keys, uint8
 
 
 
-
+*/
 // Host code
-void generateCipherKey128( uchar4 *result, uint64_t block1, uint64_t block2 )
+
+void
+h_generateCipherKey128( uchar4 *result,
+						uint64_t block1,
+						uint64_t block2 )
 {
 	for (int i = 0; i < 2; ++i) {
 		result[i + 0].x = (block1 >> (56 - 32*i)) & 0xFF;
@@ -1424,7 +1438,31 @@ void generateCipherKey128( uchar4 *result, uint64_t block1, uint64_t block2 )
 	}
 }
 
-void generateCipherKey192( uchar4 *result, uint64_t block1, uint64_t block2, uint64_t block3 )
+inline uchar4 *
+d_generateCipherKey128( uint64_t block1, uint64_t block2 )
+{
+	uchar4 *d_cipher_key;
+	uchar4 *h_cipher_key = (uchar4 *) malloc(4 * sizeof(uchar4));
+	
+	// Generates the cipher key on host from the two uint64_t blocks
+	h_generateCipherKey128(h_cipher_key, block1, block2);
+	
+	// Allocates memory for the device's cipher key, copying the host's to it
+	cudaMalloc((void **) &d_cipher_key,    4 * sizeof(uchar4));
+	cudaMemcpy(d_cipher_key, h_cipher_key, 4 * sizeof(uchar4), cudaMemcpyHostToDevice);
+	
+	// Frees up memory used temporarily for the host cipher key
+	free(h_cipher_key);
+	
+	return d_cipher_key;
+}
+
+/*
+void
+h_generateCipherKey192( uchar4 *result,
+						uint64_t block1,
+						uint64_t block2,
+						uint64_t block3 )
 {
 	for (int i = 0; i < 2; ++i) {
 		result[i + 0].x = (block1 >> (56 - 32*i)) & 0xFF;
@@ -1444,7 +1482,32 @@ void generateCipherKey192( uchar4 *result, uint64_t block1, uint64_t block2, uin
 	}
 }
 
-void generateCipherKey256( uchar4 *result, uint64_t block1, uint64_t block2, uint64_t block3, uint64_t block4 )
+inline uchar4 *
+d_generateCipherKey192( uint64_t block1, uint64_t block2, uint64_t block3 )
+{
+	uchar4 *d_cipher_key;
+	uchar4 *h_cipher_key = (uchar4 *) malloc(6 * sizeof(uchar4));
+	
+	// Generates the cipher key on host from the three uint64_t blocks
+	h_generateCipherKey192(h_cipher_key, block1, block2, block3);
+	
+	// Allocates memory for the device's cipher key, copying the host's to it
+	cudaMalloc((void **) &d_cipher_key,    6 * sizeof(uchar4));
+	cudaMemcpy(d_cipher_key, h_cipher_key, 6 * sizeof(uchar4), cudaMemcpyHostToDevice);
+	
+	// Frees up memory used temporarily for the host cipher key
+	free(h_cipher_key);
+	
+	return d_cipher_key;
+}
+
+
+void
+h_generateCipherKey256( uchar4 *result,
+						uint64_t block1,
+						uint64_t block2,
+						uint64_t block3,
+						uint64_t block4 )
 {
 	for (int i = 0; i < 2; ++i) {
 		result[i + 0].x = (block1 >> (56 - 32*i)) & 0xFF;
@@ -1468,6 +1531,29 @@ void generateCipherKey256( uchar4 *result, uint64_t block1, uint64_t block2, uin
 		result[i + 6].w = (block4 >> (32 - 32*i)) & 0xFF;
 	}
 }
+
+inline uchar4 *
+d_generateCipherKey256( uint64_t block1,
+						uint64_t block2,
+						uint64_t block3,
+						uint64_t block4 )
+{
+	uchar4 *d_cipher_key;
+	uchar4 *h_cipher_key = (uchar4 *) malloc(8 * sizeof(uchar4));
+	
+	// Generates the cipher key on host from the four uint64_t blocks
+	h_generateCipherKey256(h_cipher_key, block1, block2, block3, block4);
+	
+	// Allocates memory for the device's cipher key, copying the host's to it
+	cudaMalloc((void **) &d_cipher_key,    8 * sizeof(uchar4));
+	cudaMemcpy(d_cipher_key, h_cipher_key, 8 * sizeof(uchar4), cudaMemcpyHostToDevice);
+	
+	// Frees up memory used temporarily for the host cipher key
+	free(h_cipher_key);
+	
+	return d_cipher_key;
+}
+*/
 
 int loadFileIntoMemory( char **memory, const char *filename ) {
 	size_t file_size;
@@ -1532,7 +1618,6 @@ int writeToFile( char *memory, const char *filename, size_t file_size ) {
 	return 0;
 }
 
-
 /*
 void main128( int argc, char *argv[] ) {
 	uchar4 cipher_key[4];
@@ -1544,7 +1629,7 @@ void main128( int argc, char *argv[] ) {
 	size_t file_size;
 	
 	// Generates 128-bit cipher-key from two uint64_t
-	generateCipherKey128(cipher_key, 0x2b7e151628aed2a6, 0xabf7158809cf4f3c);
+	generateCipherKey128(cipher_key, 0x2b7e151628aed2a6, 0x2b7e151628aed2a6);
 	
 	// Loads file from disk
 	file_size = loadFileIntoMemory(&host_file, argv[1]);
@@ -1721,7 +1806,7 @@ void main192( int argc, char *argv[] ) {
 	cudaFree(dev_inv_sbox);
 	cudaFree(dev_file);
 }
-*/
+
 
 void main256( int argc, char *argv[] ) {
 	uchar4 cipher_key[8];
@@ -1767,7 +1852,7 @@ void main256( int argc, char *argv[] ) {
 	cudaThreadSynchronize();
 	
 	
-	/*
+	
 	// Encrypts the file on the device
 	encrypt256 <<< ((file_size/16 + 255)/ 256), 256 >>>
 		(
@@ -1780,7 +1865,7 @@ void main256( int argc, char *argv[] ) {
 	
 	// Writes the encrypted file to disk
 	writeToFile(host_file, argv[2], file_size);
-	*/
+	
 	
 	
 	
@@ -1798,7 +1883,7 @@ void main256( int argc, char *argv[] ) {
 	writeToFile(host_file, argv[3], file_size);
 	
 	
-	/*
+	
 	// Copies back the round keys and prints one of them
 	cudaMemcpy(host_round_keys, dev_round_keys, 11 * 4 * sizeof(uchar4), cudaMemcpyDeviceToHost);
 	
@@ -1806,7 +1891,7 @@ void main256( int argc, char *argv[] ) {
 	printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", host_round_keys[8].y, host_round_keys[9].y, host_round_keys[10].y, host_round_keys[11].y, host_round_keys[12].y, host_round_keys[13].y, host_round_keys[14].y, host_round_keys[15].y);
 	printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", host_round_keys[8].z, host_round_keys[9].z, host_round_keys[10].z, host_round_keys[11].z, host_round_keys[12].z, host_round_keys[13].z, host_round_keys[14].z, host_round_keys[15].z);
 	printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", host_round_keys[8].w, host_round_keys[9].w, host_round_keys[10].w, host_round_keys[11].w, host_round_keys[12].w, host_round_keys[13].w, host_round_keys[14].w, host_round_keys[15].w);
-	*/
+	
 	
 	// Frees up memory that is not used anymore
 	free(host_round_keys);
@@ -1818,10 +1903,523 @@ void main256( int argc, char *argv[] ) {
 	cudaFree(dev_file);
 }
 
+*/
+uchar4 *
+d_expandKey128( uchar4 *d_cipher_key, uint8_t *d_sbox ) {
+	uchar4 *d_round_keys;
+	
+	// Allocates memory on the device for the round keys
+	cudaMalloc((void **) &d_round_keys, 11 * 4 * sizeof(uchar4));
+	
+	// Generates the round keys, storing them on the global memory
+	generateRoundKeys128 <<< 1, 1 >>>
+		(
+			d_cipher_key, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+	
+	return d_round_keys;
+}
+
+/*
+uchar4 *
+d_expandKey192( uchar4 *d_cipher_key, uint8_t *d_sbox ) {
+	uchar4 *d_round_keys;
+	
+	// Allocates memory on the device for the round keys
+	cudaMalloc((void **) &d_round_keys, 13 * 6 * sizeof(uchar4));
+	
+	// Generates the round keys, storing them on the global memory
+	generateRoundKeys192 <<< 1, 1 >>>
+		(
+			d_cipher_key, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+	
+	return d_round_keys;
+}
+
+
+uchar4 *
+d_expandKey256( uchar4 *d_cipher_key, uint8_t *d_sbox ) {
+	uchar4 *d_round_keys;
+	
+	// Allocates memory on the device for the round keys
+	cudaMalloc((void **) &d_round_keys, 15 * 8 * sizeof(uchar4));
+	
+	// Generates the round keys, storing them on the global memory
+	generateRoundKeys256 <<< 1, 1 >>>
+		(
+			d_cipher_key, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+	
+	return d_round_keys;
+}
+
+
+
+
+
+*/
+inline void
+encryptDeviceToDevice128( char *d_contents,     uint8_t *d_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Encrypts the contents on the device
+	encrypt128 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+}
+/*
+inline void
+encryptDeviceToDevice192( char *d_contents,     uint8_t *d_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Encrypts the contents on the device
+	encrypt192 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+}
+
+inline void
+encryptDeviceToDevice256( char *d_contents,     uint8_t *d_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Encrypts the contents on the device
+	encrypt256 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_sbox
+		);
+	cudaThreadSynchronize();
+}
+
+
+inline void
+decryptDeviceToDevice128( char *d_contents,     uint8_t *d_inv_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Decrypts the contents on the device
+	decrypt128 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_inv_sbox
+		);
+	cudaThreadSynchronize();
+}
+
+inline void
+decryptDeviceToDevice192( char *d_contents,     uint8_t *d_inv_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Decrypts the contents on the device
+	decrypt192 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_inv_sbox
+		);
+	cudaThreadSynchronize();
+}
+
+inline void
+decryptDeviceToDevice256( char *d_contents,     uint8_t *d_inv_sbox,
+						  uchar4 *d_round_keys, size_t contents_size )
+{
+	// Decrypts the contents on the device
+	decrypt256 <<< ((contents_size/16 + 255)/ 256), 256 >>>
+		(
+			d_contents, contents_size, d_round_keys, d_inv_sbox
+		);
+	cudaThreadSynchronize();
+}
+
+
+*/
+char *
+encryptHostToDevice128( char *h_contents, size_t contents_size,
+						uint8_t *d_sbox, uchar4 *d_round_keys )
+{
+	char *d_result;
+	
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Encrypts the contents on the device
+	encryptDeviceToDevice128(d_result, d_sbox, d_round_keys, contents_size);
+	
+	return d_result;
+}
+/*
+char *
+encryptHostToDevice192( char *h_contents, size_t contents_size,
+						uint8_t *d_sbox, uchar4 *d_round_keys )
+{
+	char *d_result;
+	
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Encrypts the contents on the device
+	encryptDeviceToDevice192(d_result, d_sbox, d_round_keys, contents_size);
+	
+	return d_result;
+}
+
+char *
+encryptHostToDevice256( char *h_contents, size_t contents_size,
+						uint8_t *d_sbox, uchar4 *d_round_keys )
+{
+	char *d_result;
+	
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Encrypts the contents on the device
+	encryptDeviceToDevice256(d_result, d_sbox, d_round_keys, contents_size);
+	
+	return d_result;
+}
+
+
+inline void
+decryptHostToDevice128( char *d_result,   uint8_t *d_inv_sbox, uchar4 *d_round_keys,
+						char *h_contents, size_t contents_size )
+{
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Decrypts the contents on the device
+	decryptDeviceToDevice128(d_result, d_inv_sbox, d_round_keys, contents_size);
+}
+
+inline void
+decryptHostToDevice192( char *d_result,   uint8_t *d_inv_sbox, uchar4 *d_round_keys,
+						char *h_contents, size_t contents_size )
+{
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Decrypts the contents on the device
+	decryptDeviceToDevice192(d_result, d_inv_sbox, d_round_keys, contents_size);
+}
+
+char *
+decryptHostToDevice256( char *h_contents, size_t contents_size,
+						uint8_t *d_sbox, uchar4 *d_round_keys )
+{
+	char *d_result;
+	
+	// Allocates memory for the contents
+	cudaMalloc((void **) &d_result, contents_size);
+	
+	// Copies the contents to the device
+	cudaMemcpy(d_result, h_contents, contents_size, cudaMemcpyHostToDevice);
+	
+	// Encrypts the contents on the device
+	decryptDeviceToDevice256(d_result, d_sbox, d_round_keys, contents_size);
+	
+	return d_result;
+}
+
+*/
+char *
+encryptHostToHost128( char *h_contents, size_t contents_size,
+					  uint8_t *d_sbox,  uchar4 *d_round_keys )
+{
+	char *d_contents;
+	char *h_result = (char *) malloc(contents_size);
+	
+	// Encrypts the contents on the device
+	d_contents = encryptHostToDevice128( h_contents, contents_size,
+										 d_sbox,     d_round_keys );
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+	
+	return h_result;
+}
+/*
+char *
+encryptHostToHost192( char *h_contents, size_t contents_size,
+					  uint8_t *d_sbox,  uchar4 *d_round_keys )
+{
+	char *d_contents;
+	char *h_result = (char *) malloc(contents_size);
+	
+	// Encrypts the contents on the device
+	d_contents = encryptHostToDevice192( h_contents, contents_size,
+										 d_sbox,     d_round_keys );
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+	
+	return h_result;
+}
+
+char *
+encryptHostToHost256( char *h_contents, size_t contents_size,
+					  uint8_t *d_sbox,  uchar4 *d_round_keys )
+{
+	char *d_contents;
+	char *h_result = (char *) malloc(contents_size);
+	
+	// Encrypts the contents on the device
+	d_contents = encryptHostToDevice256( h_contents, contents_size,
+										 d_sbox,     d_round_keys );
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+	
+	return h_result;
+}
+
+void
+decryptHostToHost128( char *h_result,   char *h_contents,  size_t contents_size,
+					  uint8_t *d_inv_sbox, uchar4 *d_round_keys )
+{
+	char *d_contents;
+	
+	// Decrypts the contents on the device
+	decryptHostToDevice128(d_contents, d_sbox, d_round_keys,
+						   h_contents, contents_size);
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+}
+
+void
+decryptHostToHost192( char *h_result,   char *h_contents,  size_t contents_size,
+					  uint8_t *d_inv_sbox, uchar4 *d_round_keys )
+{
+	char *d_contents;
+	
+	// Decrypts the contents on the device
+	decryptHostToDevice192(d_contents, d_sbox, d_round_keys,
+						   h_contents, contents_size);
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+}
+
+char *
+decryptHostToHost256( char *h_contents, size_t contents_size,
+					  uint8_t *d_sbox,  uchar4 *d_round_keys )
+{
+	char *d_contents;
+	char *h_result = (char *) malloc(contents_size);
+	
+	// Encrypts the contents on the device
+	d_contents = decryptHostToDevice256( h_contents, contents_size,
+										 d_sbox,     d_round_keys );
+	
+	// Copies back the result from the device
+	cudaMemcpy(h_result, d_contents, contents_size, cudaMemcpyDeviceToHost);
+	
+	// Frees up device memory taken by the contents
+	cudaFree(d_contents);
+	
+	return h_result;
+}
+
+
+uint64_t generateNonce() {
+	// Obviously this should be replaced with something stronger
+	uint64_t result = (((uint64_t) rand()) << 32) + rand();
+	return result;
+}
+*/
+void nouveau128( int argc, char *argv[] ) {
+	uchar4 *h_round_keys;
+	uchar4 *d_cipher_key, *d_round_keys;
+	uint8_t *d_sbox;
+	char *h_file;
+	char *d_file;
+	size_t file_size;
+	
+	// Generates a 128-bits cipher-key from three uint64_t
+	d_cipher_key = d_generateCipherKey128( 0x95A8EE8E89979B9E,
+										   0xFDCBC6EB9797528D );
+	
+	// Loads file from disk
+	file_size = loadFileIntoMemory(&h_file, argv[1]);
+	
+	// Allocates memory for various resources
+	h_round_keys =    (uchar4 *) malloc(11 * 4 * sizeof(uchar4));
+	cudaMalloc((void **) &d_round_keys, 11 * 4 * sizeof(uchar4));
+	cudaMalloc((void **) &d_sbox,          256 * sizeof(uint8_t));
+	cudaMalloc((void **) &d_file,    file_size * sizeof(char));
+	
+	// Copies memory to the device
+	cudaMemcpy(d_sbox, s_box,        256 * sizeof(uint8_t), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_file, h_file, file_size * sizeof(char),    cudaMemcpyHostToDevice);
+	
+	
+	// Generates the round keys, storing them on the global memory
+	d_round_keys = d_expandKey128( d_cipher_key, d_sbox );
+	
+	
+	// Encrypts the file
+	h_file = encryptHostToHost128(h_file, file_size, d_sbox, d_round_keys);
+	
+	// Writes the encrypted file to disk
+	writeToFile(h_file, argv[2], file_size);
+	
+	
+	// Frees up memory that is not used anymore
+	free(h_round_keys);
+	free(h_file);
+	cudaFree(d_cipher_key);
+	cudaFree(d_round_keys);
+	cudaFree(d_sbox);
+	cudaFree(d_file);
+}
+
+/*
+void nouveau192( int argc, char *argv[] ) {
+	uchar4 *h_round_keys;
+	uchar4 *d_cipher_key, *d_round_keys;
+	uint8_t *d_sbox;
+	char *h_file;
+	char *d_file;
+	size_t file_size;
+	
+	// Generates a 192-bits cipher-key from three uint64_t
+	d_cipher_key = d_generateCipherKey192( 0x95A8EE8E89979B9E,
+										   0xFDCBC6EB9797528D,
+										   0x432DC26061553818 );
+	
+	// Loads file from disk
+	file_size = loadFileIntoMemory(&h_file, argv[1]);
+	
+	// Allocates memory for various resources
+	h_round_keys =    (uchar4 *) malloc(13 * 6 * sizeof(uchar4));
+	cudaMalloc((void **) &d_round_keys, 13 * 6 * sizeof(uchar4));
+	cudaMalloc((void **) &d_sbox,          256 * sizeof(uint8_t));
+	cudaMalloc((void **) &d_file,    file_size * sizeof(char));
+	
+	// Copies memory to the device
+	cudaMemcpy(d_sbox, s_box,        256 * sizeof(uint8_t), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_file, h_file, file_size * sizeof(char),    cudaMemcpyHostToDevice);
+	
+	
+	// Generates the round keys, storing them on the global memory
+	d_round_keys = d_expandKey192( d_cipher_key, d_sbox );
+	
+	
+	// Encrypts the file
+	h_file = encryptHostToHost192(h_file, file_size, d_sbox, d_round_keys);
+	
+	// Writes the encrypted file to disk
+	writeToFile(h_file, argv[2], file_size);
+	
+	
+	// Frees up memory that is not used anymore
+	free(h_round_keys);
+	free(h_file);
+	cudaFree(d_cipher_key);
+	cudaFree(d_round_keys);
+	cudaFree(d_sbox);
+	cudaFree(d_file);
+}
+
+
+void nouveau256( int argc, char *argv[] ) {
+	uchar4 *h_round_keys;
+	uchar4 *d_cipher_key, *d_round_keys;
+	uint8_t *d_sbox;
+	char *h_file;
+	char *d_file;
+	size_t file_size;
+	
+	// Generates 256-bits cipher-key from four uint64_t
+	d_cipher_key = d_generateCipherKey256( 0x95A8EE8E89979B9E,
+										   0xFDCBC6EB9797528D,
+										   0x432DC26061553818,
+										   0xEA635EC5D5A7727E );
+	
+	// Loads file from disk
+	file_size = loadFileIntoMemory(&h_file, argv[1]);
+	
+	// Allocates memory for various resources
+	h_round_keys =    (uchar4 *) malloc(15 * 8 * sizeof(uchar4));
+	cudaMalloc((void **) &d_round_keys, 15 * 8 * sizeof(uchar4));
+	cudaMalloc((void **) &d_sbox,          256 * sizeof(uint8_t));
+	cudaMalloc((void **) &d_file,    file_size * sizeof(char));
+	
+	// Copies memory to the device
+	cudaMemcpy(d_sbox, s_box,        256 * sizeof(uint8_t), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_file, h_file, file_size * sizeof(char),    cudaMemcpyHostToDevice);
+	
+	
+	// Generates the round keys, storing them on the global memory
+	d_round_keys = d_expandKey256( d_cipher_key, d_sbox );
+	
+	
+	// Encrypts the file
+	h_file = encryptHostToHost256(h_file, file_size, d_sbox, d_round_keys);
+	
+	// Writes the encrypted file to disk
+	writeToFile(h_file, argv[2], file_size);
+	
+	
+	// Decrypts the file
+	h_file = decryptHostToHost256(h_file, file_size, d_sbox, d_round_keys);
+	
+	// Writes the encrypted file to disk
+	writeToFile(h_file, argv[3], file_size);
+	
+	
+	// Frees up memory that is not used anymore
+	free(h_round_keys);
+	free(h_file);
+	cudaFree(d_cipher_key);
+	cudaFree(d_round_keys);
+	cudaFree(d_sbox);
+	cudaFree(d_file);
+}
+*/
+
 int main( int argc, char *argv[] ) {
+	srand(time(NULL));
 	//main128(argc, argv);
 	//main192(argc, argv);
-	main256(argc, argv);
+	//main256(argc, argv);
+	
+	nouveau128(argc, argv);
+	//nouveau192(argc, argv);
+	//nouveau256(argc, argv);
 	
 	return 0;
 }
