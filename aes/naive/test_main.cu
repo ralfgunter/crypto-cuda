@@ -57,7 +57,7 @@ void nouveau128( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-*/
+
 void nouveau192( int argc, char *argv[] ) {
 	uchar4 *h_round_keys;
 	uchar4 *d_cipher_key, *d_round_keys;
@@ -115,7 +115,7 @@ void nouveau192( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-/*
+*/
 void nouveau256( int argc, char *argv[] ) {
 	uchar4 *h_round_keys;
 	uchar4 *d_cipher_key, *d_round_keys;
@@ -174,12 +174,12 @@ void nouveau256( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-*/
+
 
 int main( int argc, char *argv[] ) {
 	//nouveau128(argc, argv);
-	nouveau192(argc, argv);
-	//nouveau256(argc, argv);
+	//nouveau192(argc, argv);
+	nouveau256(argc, argv);
 	
 	return 0;
 }

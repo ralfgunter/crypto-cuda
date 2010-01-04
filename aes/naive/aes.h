@@ -6,12 +6,12 @@
  *
 */
 
-#ifndef AES_H_
-#define AES_H_
+#ifndef AES_H
+#define AES_H
 
-#include <kernel_aes192.h>
+#include <kernel_aes256.h>
 
 #include <host_aes_indep.h>
-#include <host_aes192.h>
+#include <host_aes256.h>
 
 #endif

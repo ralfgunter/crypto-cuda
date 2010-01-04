@@ -9,7 +9,11 @@
 #ifndef KERNEL_AES256_H_
 #define KERNEL_AES256_H_
 
+#define NUM_THREADS 256
+
 #include <stdint.h>
+#include "aes_boxes.h"
+#include "kernel_aes_indep.h"
 
 // Key schedule
 extern __device__ uchar4 rotWord256(uchar4*, uint8_t);
