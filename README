@@ -1,0 +1,4 @@
+Currently, the only cipher implemented is AES 128, 192 and 256 bits, ECB mode. Please note that due to nvcc's aggressive inlining (and most likely some pretty bad code on my part), compilation takes quite a long time for such a simple library (10~15min per cipher bitlength).
+I'm working on breaking it down into smaller pieces (i.e. an usable API) and hopefully the CTR mode will follow without much trouble. As soon as that's done, I'll create a ruby wrapper for it.
+
+Support for other ciphers will come Real Soon Now! I will focus on symmetric algorithms for now, though.
