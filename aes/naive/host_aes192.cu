@@ -28,7 +28,7 @@ h_generateCipherKey192( uchar4 *result,
 	}
 }
 
-inline uchar4 *
+uchar4 *
 d_generateCipherKey192( uint64_t block1, uint64_t block2, uint64_t block3 )
 {
 	uchar4 *d_cipher_key;

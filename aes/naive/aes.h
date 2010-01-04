@@ -9,9 +9,9 @@
 #ifndef AES_H_
 #define AES_H_
 
-#include <kernel_aes128.h>
+#include <kernel_aes192.h>
 
 #include <host_aes_indep.h>
-#include <host_aes128.h>
+#include <host_aes192.h>
 
 #endif

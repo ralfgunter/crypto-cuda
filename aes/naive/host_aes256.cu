@@ -32,7 +32,7 @@ h_generateCipherKey256( uchar4 *result,
 	}
 }
 
-inline uchar4 *
+uchar4 *
 d_generateCipherKey256( uint64_t block1,
 						uint64_t block2,
 						uint64_t block3,

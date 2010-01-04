@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "aes.h"
 
+/*
 void nouveau128( int argc, char *argv[] ) {
 	uchar4 *h_round_keys;
 	uchar4 *d_cipher_key, *d_round_keys;
@@ -56,7 +57,7 @@ void nouveau128( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-
+*/
 void nouveau192( int argc, char *argv[] ) {
 	uchar4 *h_round_keys;
 	uchar4 *d_cipher_key, *d_round_keys;
@@ -92,7 +93,7 @@ void nouveau192( int argc, char *argv[] ) {
 	
 	
 	// Encrypts the file
-	h_file = encryptHostToHost128(h_file, file_size, d_sbox, d_round_keys);
+	h_file = encryptHostToHost192(h_file, file_size, d_sbox, d_round_keys);
 	
 	// Writes the encrypted file to disk
 	writeToFile(h_file, argv[2], file_size);
@@ -114,7 +115,7 @@ void nouveau192( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-
+/*
 void nouveau256( int argc, char *argv[] ) {
 	uchar4 *h_round_keys;
 	uchar4 *d_cipher_key, *d_round_keys;
@@ -151,7 +152,7 @@ void nouveau256( int argc, char *argv[] ) {
 	
 	
 	// Encrypts the file
-	h_file = encryptHostToHost128(h_file, file_size, d_sbox, d_round_keys);
+	h_file = encryptHostToHost256(h_file, file_size, d_sbox, d_round_keys);
 	
 	// Writes the encrypted file to disk
 	writeToFile(h_file, argv[2], file_size);
@@ -173,7 +174,7 @@ void nouveau256( int argc, char *argv[] ) {
 	cudaFree(d_sbox);
 	cudaFree(d_file);
 }
-
+*/
 
 int main( int argc, char *argv[] ) {
 	//nouveau128(argc, argv);
